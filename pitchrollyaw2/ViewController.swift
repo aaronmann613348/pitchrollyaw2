@@ -34,7 +34,19 @@ var turn_time : [Double] = []
 var gyro_x : [Double] = []
 var gyro_z : [Double] = []
 var gyro_y : [Double] = []
+    
+var roll_pos_start : [Int] = []
+var roll_pos_end : [Int] = []
 
+var roll_neg_start : [Int] = []
+var roll_neg_end : [Int] = []
+
+    var pitch_pos_start : [Int] = []
+    var pitch_pos_end : [Int] = []
+    
+    var pitch_neg_start : [Int] = []
+    var pitch_neg_end : [Int] = []
+    
 @IBOutlet var steps_label: UITextField!
 @IBOutlet var motion_type: UITextField!
     
@@ -97,9 +109,8 @@ let motionManager = CMMotionManager()
     
     func analyze(){
         var steps : Double = get_steps(acc_y, z: acc_z)
+        steps = floor(steps)
         steps_total += steps
-        NSLog("steps total : %f", steps_total)
-        NSLog("steps: %f", steps)
         self.steps_label.text = String(steps_total)
         get_turns()
         for element in turns{
@@ -111,7 +122,19 @@ let motionManager = CMMotionManager()
         acc_z = []
         yaw = []
         turns = []
+        
+        roll_pos_start = []
+        roll_pos_end = []
+        roll_neg_start = []
+        roll_neg_end = []
+        
+        pitch_pos_start = []
+        pitch_pos_end = []
+        pitch_neg_start = []
+        pitch_neg_end = []
+        
     }
+    
     func endpoint(ver:String, steps: Double){
         if ver == "t" {
             var x_step : Double = 0
@@ -119,23 +142,15 @@ let motionManager = CMMotionManager()
             var next_angle : Double = 0
             if turns.count == 0 {  /////might not be correct what if the angle is not face
                 x_step += steps*cos(yaw[0]*M_PI/180)
-                NSLog("x steps: %f", x_step)
                 y_step += steps*sin(yaw[0]*M_PI/180)
-                NSLog("y steps: %f", y_step)
             }
             else {
                 var last : Double = 0
                 for var i : Int = 0; i < turns.count; i++ {
                     next_angle = yaw[Int(turns[i])]
-                    NSLog("next angle: %f", next_angle)
                     x_step += (turns[i]-last)*steps*cos(next_angle/180*M_PI)/Double(yaw.count)
-                    NSLog("turns[i] - last: %f", turns[i]-last)
-                    NSLog("yaw.count: %i", yaw.count)
-                    NSLog("steps: %f", steps)
-                    NSLog("cos: %f", cos(next_angle*M_PI/180))
-                    NSLog("x steps: %f", x_step)
                     y_step += (turns[i]-last)*steps*sin(next_angle*M_PI/180)/Double(yaw.count)
-                    last = Double(i)
+                    last = turns[i]
                 }
             }
             adjust_matrix(x_step, y_step: y_step)
@@ -144,8 +159,7 @@ let motionManager = CMMotionManager()
     }
     
     func adjust_matrix(x_step: Double, y_step: Double){
-        NSLog("HOY")
-        NSLog("%f", x_step)
+        
         var x_step = floor(x_step*7.6)
         var y_step = floor(y_step*7.6)
         loc_1 += x_step
@@ -157,7 +171,7 @@ let motionManager = CMMotionManager()
         var part_tot : Double = 0
         for var i : Int = 0; i < yaw.count; i++ {
             part_tot = start - yaw[i]
-            if abs(part_tot) > 10 {
+            if abs(part_tot) > 15 {
                 turns.append(Double(i))
                 NSLog("iteration through yaw: %i", i)
                 NSLog("yaw: %f", yaw[i])
@@ -180,14 +194,13 @@ let motionManager = CMMotionManager()
         acc_x.append(acceleration.x)
         acc_y.append(acceleration.y)
         acc_z.append(acceleration.z)
-        var steps_thereal : Double = 0
-        //steps_thereal = get_steps(acc_y, z: acc_z)
+
         if iteration%100==0 {
             analyze()
             NSLog("SHIT")
         }
        iteration = iteration + 1
-        //self.steps_label.text = String(steps_thereal)
+
 
         
     }
@@ -251,7 +264,7 @@ let motionManager = CMMotionManager()
         
         var counter_next : Double = 0.0
         
-        let oh_f : Double = 0.4
+        let oh_f : Double = 0.6
         
         for var k = 0; k < vals.count; ++k {
             
@@ -263,7 +276,7 @@ let motionManager = CMMotionManager()
                 }
             }
             
-            if((vals[k]<(avg+std*oh_f))&&(down_step==false)){
+            if((vals[k]<(avg-std*oh_f))&&(down_step==false)){
                 counter_down = counter_down + 1
                 
                 if(counter_up>0){
@@ -300,6 +313,100 @@ let motionManager = CMMotionManager()
         }
     }
 
+    func roll_orientation_counter(){
+        var up_counter : Int = 0
+        var up_start : Int = 0
+        var down_counter : Int = 0
+        var down_start : Int = 0
 
+        for var i = 0; i < roll.count; i++ {
+            
+            if roll[i]>45 && roll[i]<135 {
+                if up_counter == 0 {
+                    up_start = i
+                }
+                up_counter += 1
+                down_counter = 0
+            }
+            
+            else if roll[i] < -45 && roll[i] > -135 {
+                if down_counter == 0 {
+                    down_start = i
+                }
+                down_counter += 1
+                up_counter = 0
+            }
+            
+            else {
+                if up_counter >= 30 {
+                    up_counter = 0
+                    roll_pos_start.append(up_start)
+                    roll_pos_end.append(i)
+                }
+                else{
+                    up_counter = 0
+                }
+                
+                if down_counter >= 30 {
+                    down_counter = 0
+                    roll_neg_start.append(down_start)
+                    roll_neg_end.append(i)
+                }
+                else{
+                    down_counter = 0
+                }
+                
+            }
+        }
+    }
+
+    
+    func pitch_orientation_counter(){
+        var up_counter : Int = 0
+        var up_start : Int = 0
+        var down_counter : Int = 0
+        var down_start : Int = 0
+        
+        for var i = 0; i < pitch.count; i++ {
+            
+            if pitch[i]>45 {
+                if up_counter == 0 {
+                    up_start = i
+                }
+                up_counter += 1
+                down_counter = 0
+            }
+                
+            else if pitch[i] < -45 {
+                if down_counter == 0 {
+                    down_start = i
+                }
+                down_counter += 1
+                up_counter = 0
+            }
+                
+            else {
+                if up_counter >= 30 {
+                    up_counter = 0
+                    pitch_pos_start.append(up_start)
+                    pitch_pos_end.append(i)
+                }
+                else{
+                    up_counter = 0
+                }
+                
+                if down_counter >= 30 {
+                    down_counter = 0
+                    pitch_neg_start.append(down_start)
+                    pitch_neg_end.append(i)
+                }
+                else{
+                    down_counter = 0
+                }
+                
+            }
+        }
+    }
+    
 }
 
